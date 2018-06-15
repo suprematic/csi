@@ -37,7 +37,14 @@
   (fn [{:keys [db]} [_ message]]
     (when-let [mbox (::mbox db)]
       (let [pid (csi/self mbox)]
-        (csi/send! mbox pid message)))
+        (csi/cast! mbox :otplike.process/! [pid message])))
+    {}))
+
+(rf/reg-event-fx ::exit
+  (fn [{:keys [db]} [_ reason]]
+    (when-let [mbox (::mbox db)]
+      (let [pid (csi/self mbox)]
+        (csi/cast! mbox :otplike.process/exit [reason])))
     {}))
 
 (defn demonstration []
@@ -51,7 +58,9 @@
       [:li.nav-item
        [:a.nav-link {:href "#" :on-click #(rf/dispatch [::disconnect])} "Disconnect"]]
       [:li.nav-item
-       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::send-message ::ping])} "Send Message"]]]]]])
+       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::send-message ::ping])} "Send Message"]]
+      [:li.nav-item
+       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::exit :exit-reason])} "Exit Process"]]]]]])
 
 (defn render []
   (reagent/render [demonstration]

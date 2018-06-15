@@ -12,7 +12,7 @@
 
 (defprotocol IErlangMBox
   (close! [_])
-  (send! [_ pid message])
+  (cast! [_ fn args])
   (call! [_ func params])
   (self  [_]))
 
@@ -99,10 +99,10 @@
         (p/close! ws) 
         nil)
       
-      (send! [_ pid message]
-        (async/put! ws [:otplike.csi.core/send pid message])
-        message)
-      
+      (cast!  [_ fn args]
+        (async/put! ws [:otplike.csi.core/cast fn args])
+        nil)
+
       (call! [_ func args]
         nil)
       
