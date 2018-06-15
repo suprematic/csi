@@ -1,19 +1,19 @@
 (defproject
   suprematic/csi  "0.0.1"
-  :plugins [[lein-cljsbuild "1.1.5"]
-            [lein-ancient "0.6.10"]
-            [lein-figwheel "0.5.14"]]
+  :plugins [[lein-cljsbuild "1.1.7"]
+            [lein-ancient "0.6.15"]
+            [lein-figwheel "0.5.16"]]
 
   :hooks   [leiningen.cljsbuild]
 
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.clojure/clojurescript "1.9.293"]
-                 [org.clojure/core.async "0.2.395"]
-                 [org.clojure/core.match "0.3.0-alpha4"]
+                 [org.clojure/clojurescript "1.10.312"]
+                 [org.clojure/core.async "0.4.474"]
+                 [org.clojure/core.match "0.3.0-alpha5"]
                  [com.cognitect/transit-cljs "0.8.256"]
 
-                 [reagent "0.6.2"]
-                 [re-frame "0.9.4"]]
+                 [reagent "0.8.1"]
+                 [re-frame "0.10.5"]]
 
   :figwheel {:server-port 3450}
 
@@ -31,8 +31,8 @@
                            :source-map-timestamp true
                            :preloads [devtools.preload]}}]}
 
-  :profiles {:dev {:dependencies [[binaryage/devtools "0.9.4"]
-                                  [figwheel-sidecar "0.5.13"]
+  :profiles {:dev {:dependencies [[binaryage/devtools "0.9.10"]
+                                  [figwheel-sidecar "0.5.16"]
                                   [com.cemerick/piggieback "0.2.2"]]
                    :source-paths ["src"]
                    :clean-targets ^{:protect false} ["public/js/compiled" :target-path]}})
