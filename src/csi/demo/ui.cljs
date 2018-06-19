@@ -13,7 +13,9 @@
     (go-loop []
       (when-let [message (<! mbox)]
         (.info js/console "ui-message :: mbox" message)
-        (recur)))
+        (recur))
+      
+      (.info js/console "ui-exit :: " (csi/exit-reason mbox))) 
 
     (assoc db ::mbox mbox)))
 

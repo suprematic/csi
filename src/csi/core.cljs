@@ -12,9 +12,10 @@
 
 (defprotocol IErlangMBox
   (close! [_])
-  (cast! [_ fn args])
+  (cast! [_ func args])
   (call! [_ func params])
-  (self  [_]))
+  (self  [_])
+  (exit-reason [_]))
 
 (def transit-reader
   (transit/reader :json
@@ -67,24 +68,34 @@
 
     (.addEventListener ws "close"
       (fn [event]
-        (.debug js/console "websocket :: on close" event)
+        (.debug js/console "websocket :: on close, closing channels" event)
         (async/close! in)
         (async/close! out)))
 
     (.addEventListener ws "message"
-      (fn [event]
-        (.debug js/console "websocket :: on message" event)
+      (fn [message]
+        (.debug js/console "websocket :: on message" message)
         (async/put! out
-          (transit/read transit-reader (.-data event)))))
+          (transit/read transit-reader (.-data message)))))
 
     result))
 
 (defn make-mbox [pid ws]
-  (let [out (async/chan)]
+  (let [out (async/chan)
+        exit-reason (atom nil)]
     (go-loop []
       (match (<! ws)
         nil
-        (async/close! out)
+        (do
+          (.debug js/console (str "mbox :: disconnect"))
+          (reset! exit-reason :disconnected)
+          (async/close! out))
+
+        [:otplike.csi.core/exit reason]
+        (do
+          (.debug js/console (str "mbox :: exit, reason=" reason))
+          (reset! exit-reason reason)
+          (async/close! out))
 
         [:otplike.csi.core/message payload]
         (do
@@ -108,6 +119,9 @@
       
       (self [_]
         pid)
+
+      (exit-reason [_]
+        @exit-reason)
 
       p/ReadPort
       (take! [_ handler]
