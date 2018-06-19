@@ -37,14 +37,14 @@
   (fn [{:keys [db]} [_ message]]
     (when-let [mbox (::mbox db)]
       (let [pid (csi/self mbox)]
-        (csi/cast! mbox :otplike.process/! [pid message])))
+        (csi/cast! mbox 'otplike.process/! [pid message])))
     {}))
 
 (rf/reg-event-fx ::exit
   (fn [{:keys [db]} [_ reason]]
     (when-let [mbox (::mbox db)]
       (let [pid (csi/self mbox)]
-        (csi/cast! mbox :otplike.process/exit [reason])))
+        (csi/cast! mbox 'otplike.process/exit [reason])))
     {}))
 
 (defn demonstration []
