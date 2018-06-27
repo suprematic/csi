@@ -4,7 +4,6 @@
    [cljs.core.async.impl.protocols :as p]
    [cljs.core.match :refer-macros [match]]
    [cognitect.transit :as transit])
-
   (:require-macros
    [cljs.core.async.macros :refer [go alt! go-loop]]))
 
@@ -13,7 +12,9 @@
 (defprotocol IErlangMBox
   (close! [_])
   (cast! [_ func args])
-  (call! [_ func params])
+  (call!
+    [_ func params]
+    [_ func params timeout])
   (self  [_])
   (exit-reason [_]))
 
@@ -82,40 +83,71 @@
 
 (defn make-mbox [pid ws]
   (let [out (async/chan)
-        exit-reason (atom nil)]
+        exit-reason (atom nil)
+        counter (atom 0)
+        returns (atom {})
+        terminate!
+        (fn [reason]
+          (when-not @exit-reason
+            (reset! exit-reason reason))
+          (async/close! out)
+          (doseq [return (vals @returns)]
+            (async/close! return)))]
+
     (go-loop []
       (match (<! ws)
         nil
         (do
           (.debug js/console (str "mbox :: disconnect"))
-          (reset! exit-reason :disconnected)
-          (async/close! out))
+          (terminate! :disconnected))
 
         [:otplike.csi.core/exit reason]
         (do
           (.debug js/console (str "mbox :: exit, reason=" reason))
-          (reset! exit-reason reason)
-          (async/close! out))
+          (terminate! reason))
 
         [:otplike.csi.core/message payload]
         (do
           (.debug js/console (str "mbox :: message, payload=" payload))
           (>! out payload)
-          (recur))))
+          (recur))
 
+        [:otplike.csi.core/return value correlation]
+        (do
+          (.debug js/console (str "mbox :: return, correlation=" correlation ", value=" value))
+          (when-let [return (get @returns correlation)]
+            (swap! returns dissoc correlation)
+            (async/>! return value)
+            (async/close! return)) 
+          (recur))))
+    
     (reify
-      IErlangMBox
+      IErlangMBox 
       (close! [_]
         (.debug js/console "mbox :: close requested, closing ws-channel")
         (p/close! ws) 
         nil)
       
-      (cast!  [_ fn args]
-        (async/put! ws [:otplike.csi.core/cast fn args])
+      (cast!  [_ func args]
+        (async/put! ws [:otplike.csi.core/cast func args])
         nil)
 
-      (call! [_ func args]
-        nil)
+      (call! [this func args]
+        (call! this func args 5000))
+      
+      (call! [this func args timeout]
+        (let [correlation (swap! counter inc)
+              return (async/chan)]
+          (swap! returns assoc correlation return)
+          
+          (go
+            (<! (async/timeout timeout))
+            (when (get @returns correlation)
+              (terminate! [:timeout [func args] timeout])
+              (close! this)))
+          
+          (async/put! ws [:otplike.csi.core/call func args correlation])
+          return))
       
       (self [_]
         pid)

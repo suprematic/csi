@@ -42,6 +42,17 @@
         (csi/cast! mbox 'otplike.process/! [pid message])))
     {}))
 
+(rf/reg-event-fx ::call-function
+  (fn [{:keys [db]} [_ func args timeout]]
+    (when-let [mbox (::mbox db)]
+      (let [pid (csi/self mbox)]
+        (go
+          (if-let [result (<! (csi/call! mbox func args timeout))]
+            (.info js/console "ui-call :: result" result)
+            (.info js/console "ui-call :: error" (csi/exit-reason mbox))))))
+    {}))
+
+
 (rf/reg-event-fx ::exit
   (fn [{:keys [db]} [_ reason]]
     (when-let [mbox (::mbox db)]
@@ -61,6 +72,15 @@
        [:a.nav-link {:href "#" :on-click #(rf/dispatch [::disconnect])} "Disconnect"]]
       [:li.nav-item
        [:a.nav-link {:href "#" :on-click #(rf/dispatch [::send-message ::ping])} "Send Message"]]
+      [:li.nav-item
+       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::call-function 'clojure.core/str ["a" "b" "c"] 1000])} "Call Function"]]
+
+      [:li.nav-item
+       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::call-function 'otplike.csi.core/crash-fn [] 1000])} "Call Crash"]]
+
+      [:li.nav-item
+       [:a.nav-link {:href "#" :on-click #(rf/dispatch [::call-function 'otplike.csi.core/sleep-fn [1000] 500])} "Call Timeout"]]
+      
       [:li.nav-item
        [:a.nav-link {:href "#" :on-click #(rf/dispatch [::exit :exit-reason])} "Exit Process"]]]]]])
 
