@@ -130,6 +130,12 @@
           (.debug js/console (str "mbox :: exit, reason=" reason))
           (terminate! reason))
 
+        [::ping payload]
+        (do
+          (.debug js/console (str "mbox :: ping, payload=" payload))
+          (async/put! ws [::pong payload])
+          (recur))
+
         [::message payload]
         (do
           (.debug js/console (str "mbox :: message, payload=" payload))
