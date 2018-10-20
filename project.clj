@@ -1,5 +1,4 @@
-(defproject
-  suprematic/csi  "0.1.0-SNAPSHOT"
+(defproject suprematic/csi "0.2.0-SNAPSHOT"
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-ancient "0.6.15"]
             [lein-figwheel "0.5.16"]]
@@ -29,7 +28,8 @@
                            :output-to "resources/public/js/compiled/application/application.js"
                            :output-dir "resources/public/js/compiled/out"
                            :source-map-timestamp true
-                           :preloads [devtools.preload]}}]}
+                           ;;:preloads [devtools.preload]
+                           }}]}
 
   :profiles {:dev {:dependencies [[binaryage/devtools "0.9.10"]
                                   [figwheel-sidecar "0.5.16"]

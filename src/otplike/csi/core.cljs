@@ -1,29 +1,34 @@
 (ns otplike.csi.core
-  (:require
-   [goog.string :as gstr]
-   [goog.string.format]
-   [cljs.core.async :as async]
-   [cljs.core.async.impl.protocols :as p]
-   [cljs.core.match :refer-macros [match]]
-   [cognitect.transit :as transit])
-  (:require-macros
-   [cljs.core.async.macros :refer [go alt! go-loop]]))
+  (:require [goog.string :as gstr]
+            [goog.string.format]
+            [cljs.core.async :as async]
+            [cljs.core.async.impl.protocols :as p]
+            [cljs.core.match :refer-macros [match]]
+            [cognitect.transit :as transit])
+  (:require-macros [cljs.core.async.macros :refer [go alt! go-loop]]))
+
 
 (defrecord Pid [id])
+
 
 (defn pid->str [pid]
   (gstr/format "<%d>" (:id pid)))
 
+
 (defrecord TRef [id])
+
 
 (defprotocol IErlangMBox
   (close! [_])
+  (reset-context! [_ ctx])
+  (update-context! [_ f])
   (cast! [_ func args])
   (call!
-   [_ func params]
-   [_ func params timeout])
+    [_ func params]
+    [_ func params timeout])
   (self [_])
   (exit-reason [_]))
+
 
 (def transit-reader
   (transit/reader
@@ -36,6 +41,7 @@
      "otp-ref"
      (fn [{:keys [id]}]
        (->TRef id))}}))
+
 
 (def transit-writer
   (transit/writer
@@ -53,6 +59,7 @@
       (fn [{:keys [id]}]
         {:id id}))}}))
 
+
 (defn- make-ws [url]
   (let [result (async/chan)
         in (async/chan)
@@ -66,7 +73,9 @@
 
        (go-loop []
          (when-let [message (<! in)]
-           (.debug js/console "ws-channel :: 'in' message, sending to WebSocket" message)
+           (.debug
+            js/console
+            "ws-channel :: 'in' message, sending to WebSocket" message)
            (.send ws (transit/write transit-writer message))
            (recur)))
 
@@ -75,7 +84,8 @@
         (reify
           p/Channel
           (close! [_]
-            (.debug js/console "ws-channel :: close requested, closing WebSocket")
+            (.debug
+             js/console "ws-channel :: close requested, closing WebSocket")
             (.close ws))
 
           (closed? [_]
@@ -105,11 +115,13 @@
          (async/put! out msg))))
     result))
 
+
 (defn make-mbox [pid ws]
   (let [out (async/chan)
         exit-reason (atom nil)
         counter (atom 0)
         returns (atom {})
+        context (atom nil)
         terminate!
         (fn [reason]
           (when-not @exit-reason
@@ -144,7 +156,11 @@
 
         [::return value correlation]
         (do
-          (.debug js/console (str "mbox :: return, correlation=" correlation ", value=" (pr-str value)))
+          (.debug
+           js/console
+           (str
+            "mbox :: return, correlation=" correlation
+            ", value=" (pr-str value)))
           (when-let [return (get @returns correlation)]
             (swap! returns dissoc correlation)
             (async/>! return value)
@@ -158,8 +174,14 @@
         (p/close! ws)
         nil)
 
+      (reset-context! [_ ctx]
+        (reset! context ctx))
+
+      (update-context! [_ f]
+        (swap! context f))
+
       (cast! [_ func args]
-        (async/put! ws [::cast func args])
+        (async/put! ws [[::cast func args] @context])
         nil)
 
       (call! [this func args]
@@ -171,26 +193,38 @@
               return-chan (async/chan)
               timeout-chan (async/timeout timeout)]
           (swap! returns assoc correlation result-chan)
-          (.debug js/console (str "mbox :: call! correlation=" correlation ", args" (pr-str args)))
+          (.debug
+           js/console
+           (str
+            "mbox :: call! correlation=" correlation ", args" (pr-str args)))
           (go
             (match (async/alts! [result-chan timeout-chan])
               [nil result-chan]
               (do
-                (.debug js/console (str "mbox :: call! correlation=" correlation " - disconnected"))
+                (.debug
+                 js/console
+                 (str
+                  "mbox :: call! correlation=" correlation " - disconnected"))
                 (terminate! [:disconnected [func args]])
                 (close! this))
 
               [result result-chan]
               (when-not (async/offer! return-chan result)
-                (.warn js/console (str "mbox :: call! correlation=" correlation " - no receiver for the result, dropping")))
+                (.warn
+                 js/console
+                 (str
+                  "mbox :: call! correlation=" correlation
+                  " - no receiver for the result, dropping")))
 
               [nil timeout-chan]
               (do
-                (.debug js/console (str "mbox :: call! correlation=" correlation " - timeout"))
+                (.debug
+                 js/console
+                 (str "mbox :: call! correlation=" correlation " - timeout"))
                 (terminate! [:timeout [func args] timeout])
                 (close! this))))
 
-          (async/put! ws [::call func args correlation])
+          (async/put! ws [[::call func args correlation] @context])
           return-chan))
 
       (self [_]
