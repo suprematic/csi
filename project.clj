@@ -1,4 +1,4 @@
-(defproject suprematic/csi "0.3.0"
+(defproject suprematic/csi "0.4.0-SNAPSHOT"
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-ancient "0.6.15"]
             [lein-figwheel "0.5.16"]]
