@@ -1,4 +1,9 @@
 (defproject suprematic/csi "0.4.0-SNAPSHOT"
+  :description "ClojureScript interface (inspired by Erlang's Java Interface)"
+  :url "https://github.com/suprematic/csi"
+  :license {:name "Eclipse Public License - v1.0"
+            :url  "https://www.eclipse.org/legal/epl-v10.html"}
+
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-figwheel "0.5.16"]]
 
