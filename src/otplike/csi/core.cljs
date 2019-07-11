@@ -32,32 +32,32 @@
 
 (def transit-reader
   (transit/reader
-   :json
-   {:handlers
-    {"pid"
-     (fn [{:keys [id]}]
-       (->Pid id))
+    :json
+    {:handlers
+     {"pid"
+      (fn [{:keys [id]}]
+        (->Pid id))
 
-     "otp-ref"
-     (fn [{:keys [id]}]
-       (->TRef id))}}))
+      "otp-ref"
+      (fn [{:keys [id]}]
+        (->TRef id))}}))
 
 
 (def transit-writer
   (transit/writer
-   :json
-   {:handlers
-    {Pid
-     (transit/write-handler
-      (constantly "pid")
-      (fn [{:keys [id]}]
-        {:id id}))
+    :json
+    {:handlers
+     {Pid
+      (transit/write-handler
+        (constantly "pid")
+        (fn [{:keys [id]}]
+          {:id id}))
 
-     TRef
-     (transit/write-handler
-      (constantly "otp-ref")
-      (fn [{:keys [id]}]
-        {:id id}))}}))
+      TRef
+      (transit/write-handler
+        (constantly "otp-ref")
+        (fn [{:keys [id]}]
+          {:id id}))}}))
 
 
 (defn- make-ws [url]
@@ -67,52 +67,52 @@
         ws (js/WebSocket. url)]
 
     (.addEventListener
-     ws "open"
-     (fn [event]
-       (.debug js/console "websocket :: on open" event)
+      ws "open"
+      (fn [event]
+        (.debug js/console "websocket :: on open" event)
 
-       (go-loop []
-         (when-let [message (<! in)]
-           (.debug
-            js/console
-            "ws-channel :: 'in' message, sending to WebSocket" message)
-           (.send ws (transit/write transit-writer message))
-           (recur)))
-
-       (async/put!
-        result
-        (reify
-          p/Channel
-          (close! [_]
+        (go-loop []
+          (when-let [message (<! in)]
             (.debug
-             js/console "ws-channel :: close requested, closing WebSocket")
-            (.close ws))
+              js/console
+              "ws-channel :: 'in' message, sending to WebSocket" message)
+            (.send ws (transit/write transit-writer message))
+            (recur)))
 
-          (closed? [_]
-            (= (.-readyState ws) 3))
+        (async/put!
+          result
+          (reify
+            p/Channel
+            (close! [_]
+              (.debug
+                js/console "ws-channel :: close requested, closing WebSocket")
+              (.close ws))
 
-          p/ReadPort
-          (take! [_ handler]
-            (p/take! out handler))
+            (closed? [_]
+              (= (.-readyState ws) 3))
 
-          p/WritePort
-          (put! [_ val handler]
-            (p/put! in val handler))))))
+            p/ReadPort
+            (take! [_ handler]
+              (p/take! out handler))
+
+            p/WritePort
+            (put! [_ val handler]
+              (p/put! in val handler))))))
 
     (.addEventListener
-     ws "close"
-     (fn [event]
-       (.debug js/console "websocket :: on close" event)
-       (async/close! in)
-       (async/close! out)
-       (async/put! result out)))
+      ws "close"
+      (fn [event]
+        (.debug js/console "websocket :: on close" event)
+        (async/close! in)
+        (async/close! out)
+        (async/put! result out)))
 
     (.addEventListener
-     ws "message"
-     (fn [event]
-       (.debug js/console "websocket :: on message" event)
-       (let [msg (transit/read transit-reader (.-data event))]
-         (async/put! out msg))))
+      ws "message"
+      (fn [event]
+        (.debug js/console "websocket :: on message" event)
+        (let [msg (transit/read transit-reader (.-data event))]
+          (async/put! out msg))))
     result))
 
 
@@ -157,10 +157,10 @@
         [::return value correlation]
         (do
           (.debug
-           js/console
-           (str
-            "mbox :: return, correlation=" correlation
-            ", value=" (pr-str value)))
+            js/console
+            (str
+              "mbox :: return, correlation=" correlation
+              ", value=" (pr-str value)))
           (when-let [return (get @returns correlation)]
             (swap! returns dissoc correlation)
             (async/>! return value)
@@ -194,33 +194,33 @@
               timeout-chan (async/timeout timeout)]
           (swap! returns assoc correlation result-chan)
           (.debug
-           js/console
-           (str
-            "mbox :: call! correlation=" correlation ", args" (pr-str args)))
+            js/console
+            (str
+              "mbox :: call! correlation=" correlation ", args" (pr-str args)))
           (go
             (match (async/alts! [result-chan timeout-chan])
               [nil result-chan]
               (do
                 (.debug
-                 js/console
-                 (str
-                  "mbox :: call! correlation=" correlation " - disconnected"))
+                  js/console
+                  (str
+                    "mbox :: call! correlation=" correlation " - disconnected"))
                 (terminate! [:disconnected [func args]])
                 (close! this))
 
               [result result-chan]
               (when-not (async/offer! return-chan result)
                 (.warn
-                 js/console
-                 (str
-                  "mbox :: call! correlation=" correlation
-                  " - no receiver for the result, dropping")))
+                  js/console
+                  (str
+                    "mbox :: call! correlation=" correlation
+                    " - no receiver for the result, dropping")))
 
               [nil timeout-chan]
               (do
                 (.debug
-                 js/console
-                 (str "mbox :: call! correlation=" correlation " - timeout"))
+                  js/console
+                  (str "mbox :: call! correlation=" correlation " - timeout"))
                 (terminate! [:timeout [func args] timeout])
                 (close! this))))
 
