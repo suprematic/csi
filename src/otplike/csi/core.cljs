@@ -8,11 +8,12 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 
+;; =================================================================
+;; Internal
+;; =================================================================
+
+
 (defrecord Pid [id])
-
-
-(defn pid->str [pid]
-  (gstr/format "<%d>" (:id pid)))
 
 
 (defrecord TRef [id])
@@ -115,7 +116,7 @@
     result))
 
 
-(defn make-mbox [pid ws]
+(defn- make-mbox [pid ws]
   (let [out (async/chan)
         exit-reason (atom nil)
         counter (atom 0)
@@ -219,6 +220,15 @@
       p/ReadPort
       (take! [_ handler]
         (p/take! out handler)))))
+
+
+;; =================================================================
+;; API
+;; =================================================================
+
+
+(defn pid->str [pid]
+  (gstr/format "<%d>" (:id pid)))
 
 
 (defn mbox
