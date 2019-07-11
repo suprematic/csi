@@ -5,7 +5,7 @@
             [cljs.core.async.impl.protocols :as p]
             [cljs.core.match :refer-macros [match]]
             [cognitect.transit :as transit])
-  (:require-macros [cljs.core.async.macros :refer [go alt! go-loop]]))
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 
 (defrecord Pid [id])
@@ -69,13 +69,8 @@
     (.addEventListener
       ws "open"
       (fn [event]
-        (.debug js/console "websocket :: on open" event)
-
         (go-loop []
           (when-let [message (<! in)]
-            (.debug
-              js/console
-              "ws-channel :: 'in' message, sending to WebSocket" message)
             (.send ws (transit/write transit-writer message))
             (recur)))
 
@@ -84,8 +79,6 @@
           (reify
             p/Channel
             (close! [_]
-              (.debug
-                js/console "ws-channel :: close requested, closing WebSocket")
               (.close ws))
 
             (closed? [_]
@@ -102,7 +95,6 @@
     (.addEventListener
       ws "close"
       (fn [event]
-        (.debug js/console "websocket :: on close" event)
         (async/close! in)
         (async/close! out)
         (async/put! result out)))
@@ -110,7 +102,6 @@
     (.addEventListener
       ws "message"
       (fn [event]
-        (.debug js/console "websocket :: on message" event)
         (let [msg (transit/read transit-reader (.-data event))]
           (async/put! out msg))))
     result))
@@ -134,7 +125,7 @@
       (match (<! ws)
         nil
         (do
-          (.debug js/console (str "mbox :: disconnect"))
+          (.debug js/console (str "mbox :: connection closed"))
           (terminate! :disconnected))
 
         [::exit reason]
@@ -144,23 +135,16 @@
 
         [::ping payload]
         (do
-          (.debug js/console (str "mbox :: ping, payload=" payload))
           (async/put! ws [::pong payload])
           (recur))
 
         [::message payload]
         (do
-          (.debug js/console (str "mbox :: message, payload=" payload))
           (>! out payload)
           (recur))
 
         [::return value correlation]
         (do
-          (.debug
-            js/console
-            (str
-              "mbox :: return, correlation=" correlation
-              ", value=" (pr-str value)))
           (when-let [return (get @returns correlation)]
             (swap! returns dissoc correlation)
             (async/>! return value)
@@ -170,7 +154,6 @@
     (reify
       IErlangMBox
       (close! [_]
-        (.debug js/console "mbox :: close requested, closing ws-channel")
         (p/close! ws)
         nil)
 
@@ -193,18 +176,10 @@
               return-chan (async/chan)
               timeout-chan (async/timeout timeout)]
           (swap! returns assoc correlation result-chan)
-          (.debug
-            js/console
-            (str
-              "mbox :: call! correlation=" correlation ", args" (pr-str args)))
           (go
             (match (async/alts! [result-chan timeout-chan])
               [nil result-chan]
               (do
-                (.debug
-                  js/console
-                  (str
-                    "mbox :: call! correlation=" correlation " - disconnected"))
                 (terminate! [:disconnected [func args]])
                 (close! this))
 
@@ -213,14 +188,14 @@
                 (.warn
                   js/console
                   (str
-                    "mbox :: call! correlation=" correlation
+                    "mbox :: call, correlation=" correlation
                     " - no receiver for the result, dropping")))
 
               [nil timeout-chan]
               (do
                 (.debug
                   js/console
-                  (str "mbox :: call! correlation=" correlation " - timeout"))
+                  (str "mbox :: call, correlation=" correlation " - timeout"))
                 (terminate! [:timeout [func args] timeout])
                 (close! this))))
 
@@ -239,13 +214,12 @@
 
 
 (defn mbox [url]
-  (.debug js/console "handshake :: create mbox with url=" url)
   (go
     (let [ws (<! (make-ws url))]
       (match (<! ws)
         [::self pid]
         (do
-          (.debug js/console "handshake :: counterparty self" pid)
+          (.debug js/console "handshake :: counterparty pid" pid)
           (make-mbox pid ws))
 
         nil
@@ -255,6 +229,5 @@
 
         unexpected
         (do
-
           (.warn js/console "handshake :: unexpected message" unexpected)
           nil)))))
