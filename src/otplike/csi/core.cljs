@@ -30,41 +30,49 @@
   (exit-reason [_]))
 
 
-(def transit-reader
+(def ^:private default-transit-read-handlers
+  {"pid"
+   (fn [{:keys [id]}]
+     (->Pid id))
+
+   "otp-ref"
+   (fn [{:keys [id]}]
+     (->TRef id))})
+
+
+(defn- make-transit-reader [{:keys [transit-read-handlers]}]
   (transit/reader
     :json
-    {:handlers
-     {"pid"
-      (fn [{:keys [id]}]
-        (->Pid id))
-
-      "otp-ref"
-      (fn [{:keys [id]}]
-        (->TRef id))}}))
+    {:handlers (merge default-transit-read-handlers transit-read-handlers)}))
 
 
-(def transit-writer
+(def ^:private default-transit-write-handlers
+  {Pid
+   (transit/write-handler
+     (constantly "pid")
+     (fn [{:keys [id]}]
+       {:id id}))
+
+   TRef
+   (transit/write-handler
+     (constantly "otp-ref")
+     (fn [{:keys [id]}]
+       {:id id}))})
+
+
+(defn- make-transit-writer [{:keys [transit-write-handlers]}]
   (transit/writer
     :json
-    {:handlers
-     {Pid
-      (transit/write-handler
-        (constantly "pid")
-        (fn [{:keys [id]}]
-          {:id id}))
-
-      TRef
-      (transit/write-handler
-        (constantly "otp-ref")
-        (fn [{:keys [id]}]
-          {:id id}))}}))
+    {:handlers (merge default-transit-write-handlers transit-write-handlers)}))
 
 
-(defn- make-ws [url]
+(defn- make-ws [url opts]
   (let [result (async/chan)
         in (async/chan)
         out (async/chan)
-        ws (js/WebSocket. url)]
+        ws (js/WebSocket. url)
+        transit-reader (make-transit-reader opts)
+        transit-writer (make-transit-writer opts)]
 
     (.addEventListener
       ws "open"
@@ -213,21 +221,24 @@
         (p/take! out handler)))))
 
 
-(defn mbox [url]
-  (go
-    (let [ws (<! (make-ws url))]
-      (match (<! ws)
-        [::self pid]
-        (do
-          (.debug js/console "handshake :: counterparty pid" pid)
-          (make-mbox pid ws))
+(defn mbox
+  ([url]
+   (mbox url {}))
+  ([url opts]
+   (go
+     (let [ws (<! (make-ws url opts))]
+       (match (<! ws)
+         [::self pid]
+         (do
+           (.debug js/console "handshake :: counterparty pid" pid)
+           (make-mbox pid ws))
 
-        nil
-        (do
-          (.warn js/console "handshake :: unexpected connection close")
-          nil)
+         nil
+         (do
+           (.warn js/console "handshake :: unexpected connection close")
+           nil)
 
-        unexpected
-        (do
-          (.warn js/console "handshake :: unexpected message" unexpected)
-          nil)))))
+         unexpected
+         (do
+           (.warn js/console "handshake :: unexpected message" unexpected)
+           nil))))))
