@@ -242,7 +242,8 @@
        (match (<! ws)
          [::self pid]
          (do
-           (.debug js/console "[CSI] handshake :: counterparty pid" pid)
+           (.debug js/console
+             "[CSI] handshake :: counterparty pid" (pid->str pid))
            (make-mbox pid ws))
 
          nil
