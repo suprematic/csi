@@ -134,12 +134,12 @@
       (match (<! ws)
         nil
         (do
-          (.debug js/console (str "mbox :: connection closed"))
+          (.debug js/console (str "[CSI] mbox :: connection closed"))
           (terminate! :disconnected))
 
         [::exit reason]
         (do
-          (.debug js/console (str "mbox :: exit, reason=" reason))
+          (.debug js/console (str "[CSI] mbox :: exit, reason=" reason))
           (terminate! reason))
 
         [::ping payload]
@@ -197,14 +197,16 @@
                 (.warn
                   js/console
                   (str
-                    "mbox :: call, correlation=" correlation
+                    "[CSI] mbox :: call, correlation=" correlation
                     " - no receiver for the result, dropping")))
 
               [nil timeout-chan]
               (do
                 (.debug
                   js/console
-                  (str "mbox :: call, correlation=" correlation " - timeout"))
+                  (str
+                    "[CSI] mbox :: call, correlation="
+                    correlation " - timeout"))
                 (terminate! [:timeout [func args] timeout])
                 (close! this))))
 
@@ -240,15 +242,15 @@
        (match (<! ws)
          [::self pid]
          (do
-           (.debug js/console "handshake :: counterparty pid" pid)
+           (.debug js/console "[CSI] handshake :: counterparty pid" pid)
            (make-mbox pid ws))
 
          nil
          (do
-           (.warn js/console "handshake :: unexpected connection close")
+           (.warn js/console "[CSI] handshake :: unexpected connection close")
            nil)
 
          unexpected
          (do
-           (.warn js/console "handshake :: unexpected message" unexpected)
+           (.warn js/console "[CSI] handshake :: unexpected message" unexpected)
            nil))))))
