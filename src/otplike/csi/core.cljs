@@ -34,6 +34,9 @@
 (def ^:private default-ping-timeout-ms 20000)
 
 
+(def ^:private default-pongs-missing-allowed 2)
+
+
 (def ^:private default-transit-read-handlers
   {"pid"
    (fn [{:keys [id]}]
@@ -133,45 +136,51 @@
           (doseq [return (vals @returns)]
             (async/close! return)))]
 
-    (go-loop [ping-counter 0]
+    (go-loop [ping-counter 0
+              pongs-waiting 0]
       (let [timeout (async/timeout default-ping-timeout-ms)]
         (match (async/alts! [ws timeout] :priority true)
           [_ timeout]
-          (do
-            (async/put! ws [::ping ping-counter])
-            (recur (inc ping-counter)))
+          (if (> pongs-waiting default-pongs-missing-allowed)
+            (do
+              (.debug js/console "[CSI] mbox :: exit, pongs missing")
+              (terminate! [:pongs-missing pongs-waiting]))
+            (do
+              (async/put! ws [::ping ping-counter])
+              (recur (inc ping-counter) (inc pongs-waiting))))
 
-          [nil ws]
-          (do
-            (.debug js/console (str "[CSI] mbox :: connection closed"))
-            (terminate! :disconnected))
+          ws-result
+          (match (first ws-result)
+            nil
+            (do
+              (.debug js/console (str "[CSI] mbox :: connection closed"))
+              (terminate! :disconnected))
 
-          [[::exit reason] ws]
-          (do
-            (.debug js/console (str "[CSI] mbox :: exit, reason=" reason))
-            (terminate! reason))
+            [::exit reason]
+            (do
+              (.debug js/console (str "[CSI] mbox :: exit, reason=" reason))
+              (terminate! reason))
 
-          [[::pong payload] ws]
-          ;; TODO check the counter
-          (recur ping-counter)
+            [::pong payload]
+            (recur ping-counter 0)
 
-          [[::ping payload] ws]
-          (do
-            (async/put! ws [::pong payload])
-            (recur ping-counter))
+            [::ping payload]
+            (do
+              (async/put! ws [::pong payload])
+              (recur ping-counter pongs-waiting))
 
-          [[::message payload] ws]
-          (do
-            (>! out payload)
-            (recur ping-counter))
+            [::message payload]
+            (do
+              (>! out payload)
+              (recur ping-counter pongs-waiting))
 
-          [[::return value correlation] ws]
-          (do
-            (when-let [return (get @returns correlation)]
-              (swap! returns dissoc correlation)
-              (async/>! return value)
-              (async/close! return))
-            (recur ping-counter)))))
+            [::return value correlation]
+            (do
+              (when-let [return (get @returns correlation)]
+                (swap! returns dissoc correlation)
+                (async/>! return value)
+                (async/close! return))
+              (recur ping-counter pongs-waiting))))))
 
     (reify
       IErlangMBox
