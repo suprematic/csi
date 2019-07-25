@@ -31,6 +31,9 @@
   (exit-reason [_]))
 
 
+(def ^:private default-ping-timeout-ms 20000)
+
+
 (def ^:private default-transit-read-handlers
   {"pid"
    (fn [{:keys [id]}]
@@ -130,35 +133,45 @@
           (doseq [return (vals @returns)]
             (async/close! return)))]
 
-    (go-loop []
-      (match (<! ws)
-        nil
-        (do
-          (.debug js/console (str "[CSI] mbox :: connection closed"))
-          (terminate! :disconnected))
+    (go-loop [ping-counter 0]
+      (let [timeout (async/timeout default-ping-timeout-ms)]
+        (match (async/alts! [ws timeout] :priority true)
+          [_ timeout]
+          (do
+            (async/put! ws [::ping ping-counter])
+            (recur (inc ping-counter)))
 
-        [::exit reason]
-        (do
-          (.debug js/console (str "[CSI] mbox :: exit, reason=" reason))
-          (terminate! reason))
+          [nil ws]
+          (do
+            (.debug js/console (str "[CSI] mbox :: connection closed"))
+            (terminate! :disconnected))
 
-        [::ping payload]
-        (do
-          (async/put! ws [::pong payload])
-          (recur))
+          [[::exit reason] ws]
+          (do
+            (.debug js/console (str "[CSI] mbox :: exit, reason=" reason))
+            (terminate! reason))
 
-        [::message payload]
-        (do
-          (>! out payload)
-          (recur))
+          [[::pong payload] ws]
+          ;; TODO check the counter
+          (recur ping-counter)
 
-        [::return value correlation]
-        (do
-          (when-let [return (get @returns correlation)]
-            (swap! returns dissoc correlation)
-            (async/>! return value)
-            (async/close! return))
-          (recur))))
+          [[::ping payload] ws]
+          (do
+            (async/put! ws [::pong payload])
+            (recur ping-counter))
+
+          [[::message payload] ws]
+          (do
+            (>! out payload)
+            (recur ping-counter))
+
+          [[::return value correlation] ws]
+          (do
+            (when-let [return (get @returns correlation)]
+              (swap! returns dissoc correlation)
+              (async/>! return value)
+              (async/close! return))
+            (recur ping-counter)))))
 
     (reify
       IErlangMBox
