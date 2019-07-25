@@ -122,12 +122,15 @@
     result))
 
 
-(defn- make-mbox [pid ws]
+(defn- make-mbox [pid ws opts]
   (let [out (async/chan)
         exit-reason (atom nil)
         counter (atom 0)
         returns (atom {})
         context (atom nil)
+        ping-timeout-ms (or (:ping-timeout-ms opts) default-ping-timeout-ms)
+        pongs-missing-allowed
+        (or (:pongs-missing-allowed opts) default-pongs-missing-allowed)
         terminate!
         (fn [reason]
           (when-not @exit-reason
@@ -138,10 +141,10 @@
 
     (go-loop [ping-counter 0
               pongs-waiting 0]
-      (let [timeout (async/timeout default-ping-timeout-ms)]
+      (let [timeout (async/timeout ping-timeout-ms)]
         (match (async/alts! [ws timeout] :priority true)
           [_ timeout]
-          (if (> pongs-waiting default-pongs-missing-allowed)
+          (if (> pongs-waiting pongs-missing-allowed)
             (do
               (.debug js/console "[CSI] mbox :: exit, pongs missing")
               (terminate! [:pongs-missing pongs-waiting]))
@@ -266,7 +269,7 @@
          (do
            (.debug js/console
              "[CSI] handshake :: counterparty pid" (pid->str pid))
-           (make-mbox pid ws))
+           (make-mbox pid ws opts))
 
          nil
          (do
