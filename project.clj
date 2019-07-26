@@ -1,4 +1,4 @@
-(defproject suprematic/csi "0.5.0-SNAPSHOT"
+(defproject suprematic/csi "0.5.0"
   :description "ClojureScript interface (inspired by Erlang's Java Interface)"
   :url "https://github.com/suprematic/csi"
   :license {:name "Eclipse Public License - v1.0"
